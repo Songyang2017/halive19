@@ -141,6 +141,8 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         setContentView(root);
+        goImmersive();
+        wireTouch();
         loadChannels();
         menu.reload();
         wireVideo();
@@ -239,6 +241,33 @@ public class MainActivity extends Activity {
             in.close();
         } catch (Throwable ignored) {
         }
+    }
+
+    /** 手机：点画面开关菜单（D-pad 仍然可用）。 */
+    private void wireTouch() {
+        video.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                if (e.getAction() == android.view.MotionEvent.ACTION_UP) {
+                    if (menu.isOpen()) {
+                        hideMenu();
+                    } else {
+                        showMenu();
+                    }
+                }
+                return true;
+            }
+        });
+    }
+
+    /** 沉浸式全屏，去掉状态栏与导航栏。 */
+    private void goImmersive() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
     private void wireVideo() {
@@ -405,8 +434,15 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) goImmersive();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        goImmersive();
         ignoreKeysUntil = android.os.SystemClock.uptimeMillis() + 600L;
     }
 

@@ -66,6 +66,19 @@ public class ChannelMenuView extends View {
 
     /** 一屏显示多少行（按屏幕高度算，onDraw 里更新） */
     private int rows = 9;
+    /** 左侧栏目列宽度，窄屏（手机）会自动收窄 */
+    private float sideW = 238f;
+    private boolean compact;
+    private float catRowY0;
+    private float catRowH;
+    private float sideRight;
+
+    // 触摸
+    private float downY;
+    private float lastY;
+    private float dragAcc;
+    private boolean dragging;
+    private boolean downInSide;
     private float rowH = 56f;
     private float panelLeft;
     private float panelW;
@@ -274,6 +287,85 @@ public class ChannelMenuView extends View {
         }
     }
 
+    // ---------------------------------------------------------------- 触摸（手机）
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent e) {
+        if (!open) return false;
+        switch (e.getActionMasked()) {
+            case android.view.MotionEvent.ACTION_DOWN:
+                downY = lastY = e.getY();
+                dragAcc = 0;
+                dragging = false;
+                downInSide = e.getX() < sideRight;
+                return true;
+            case android.view.MotionEvent.ACTION_MOVE: {
+                float dy = e.getY() - lastY;
+                lastY = e.getY();
+                if (!dragging && Math.abs(e.getY() - downY) > dp(8)) dragging = true;
+                if (dragging) {
+                    dragAcc += dy;
+                    float step = rowH * 0.6f;
+                    while (dragAcc > step) {
+                        if (!scrollBy(1)) break;
+                        dragAcc -= step;
+                    }
+                    while (dragAcc < -step) {
+                        if (!scrollBy(-1)) break;
+                        dragAcc += step;
+                    }
+                }
+                return true;
+            }
+            case android.view.MotionEvent.ACTION_UP:
+                if (!dragging) {
+                    if (downInSide) {
+                        int c = catAt(e.getY());
+                        if (c >= 0) {
+                            cat = c;
+                            enterCat();
+                        }
+                    } else if (e.getX() > panelLeft + panelW) {
+                        listener.onClose();
+                    } else {
+                        int idx = rowAt(e.getY());
+                        if (idx >= 0 && idx < cats.get(cat).size()) {
+                            sel = idx;
+                            listener.onPick(cats.get(cat).get(idx).intValue());
+                        } else {
+                            listener.onClose();
+                        }
+                    }
+                }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    /** 拖动滚动：只动窗口，不动选中项。返回是否真的滚了。 */
+    private boolean scrollBy(int delta) {
+        int total = cats.get(cat).size();
+        int max = Math.max(0, total - rows);
+        int next = Math.max(0, Math.min(max, startIdx + delta));
+        if (next == startIdx) return false;
+        startIdx = next;
+        invalidate();
+        return true;
+    }
+
+    private int rowAt(float y) {
+        if (y < headerH) return -1;
+        int idx = startIdx + (int) ((y - headerH) / rowH);
+        return idx;
+    }
+
+    private int catAt(float y) {
+        if (y < catRowY0) return -1;
+        int i = (int) ((y - catRowY0) / catRowH);
+        return (i >= 0 && i < CATS.length) ? i : -1;
+    }
+
     // ---------------------------------------------------------------- 绘制
 
     @Override
@@ -282,10 +374,13 @@ public class ChannelMenuView extends View {
         final int h = getHeight();
         if (w <= 0 || h <= 0) return;
 
-        final float m = dp(26);
-        final float sideW = dp(238);
+        final float m = dp(16);
+        // 手机竖屏时把栏目列收窄，横向 TV 仍用 238dp
+        sideW = Math.min(dp(238), w * 0.30f);
+        compact = sideW < dp(150);
         headerH = dp(64);
-        panelLeft = m + sideW + dp(24);
+        panelLeft = m + sideW + dp(12);
+        sideRight = m + sideW;
 
         // 通高：上下都顶到屏幕边缘，行数按剩余高度均分，正好铺满
         rows = Math.max(5, Math.min(13, (int) ((h - headerH) / dp(56))));
@@ -293,9 +388,9 @@ public class ChannelMenuView extends View {
 
         // 宽度只按当前栏目的频道名算，够显示全即可；同时不超过可用宽度
         float maxName = measureLongestName(cats.get(cat));
-        panelW = Math.min(Math.max(dp(300), maxName + dp(154)), dp(460));
-        float maxAvail = w - panelLeft - dp(40);
-        if (panelW > maxAvail) panelW = Math.max(dp(240), maxAvail);
+        panelW = Math.min(Math.max(dp(260), maxName + dp(140)), dp(460));
+        float maxAvail = w - panelLeft - dp(16);
+        if (panelW > maxAvail) panelW = Math.max(dp(180), maxAvail);
 
         drawScrim(c, w, h);
         drawSidebar(c, w, h, m, sideW);
@@ -343,8 +438,9 @@ public class ChannelMenuView extends View {
         fill.setColor(C_ACCENT);
         c.drawCircle(m + dp(8), dp(41.5f), dp(2.6f), fill);
 
-        final float catRowH = dp(48);
-        final float y0 = dp(70);
+        catRowH = compact ? dp(44) : dp(48);
+        catRowY0 = compact ? dp(56) : dp(70);
+        final float y0 = catRowY0;
         for (int i = 0; i < CATS.length; i++) {
             RectF r = new RectF(m + dp(2), y0 + i * catRowH, m + sideW - dp(12), y0 + i * catRowH + dp(42));
             boolean on = i == cat;
@@ -364,11 +460,15 @@ public class ChannelMenuView extends View {
 
             tp.setTypeface(on ? Typeface.DEFAULT : light);
             tp.setFakeBoldText(on);
-            tp.setTextSize(dp(17));
+            tp.setTextSize(compact ? dp(14) : dp(17));
             tp.setColor(on ? C_TEXT : C_SUB);
             c.drawText(CATS[i], r.left + dp(18), r.centerY() - (tp.getFontMetrics().ascent
                     + tp.getFontMetrics().descent) / 2f, tp);
 
+            if (compact) {
+                tp.setTextAlign(Paint.Align.LEFT);
+                continue;
+            }
             tp.setTypeface(Typeface.DEFAULT);
             tp.setFakeBoldText(false);
             tp.setTextSize(dp(12));
