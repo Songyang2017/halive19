@@ -1,0 +1,13 @@
+# 构建产物
+build/
+*.apk
+*.idsig
+*.dex
+*.class
+
+# 本机配置
+local.properties
+.DS_Store
+
+# 真实频道清单（含运营商地址，不入库）
+channels.json

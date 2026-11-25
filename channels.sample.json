@@ -1,0 +1,17 @@
+[
+  {
+    "no": 1,
+    "name": "示例频道一",
+    "url": "http://example.com/live/ch01/index.m3u8"
+  },
+  {
+    "no": 2,
+    "name": "示例频道二",
+    "url": "http://example.com/live/ch02/index.m3u8"
+  },
+  {
+    "no": 3,
+    "name": "示例高清频道",
+    "url": "http://example.com/live/ch03/index.m3u8"
+  }
+]
