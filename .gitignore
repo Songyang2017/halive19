@@ -9,6 +9,6 @@ build/
 local.properties
 .DS_Store
 
-# 真实频道清单（含运营商地址，不入库）
+# 真实频道清单（含运营商地址，不入库）；构建时由 build.sh 从仓库根目录拷进 assets
 channels.json
-!app/src/main/assets/channels.json
+app/src/main/assets/channels.json

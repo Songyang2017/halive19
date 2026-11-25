@@ -27,6 +27,17 @@ mkdir -p "$OUT/classes" "$OUT/gen" "$OUT/dexout"
 
 echo "[1/5] 资源"
 "$BT/aapt2" compile --dir "$SRC/res" -o "$OUT/compiled.flata"
+# 打包前准备 assets 里的清单：优先用仓库根目录的真实 channels.json，
+# 没有就用内置示例（仓库里只放示例，避免把运营商地址提交上去）
+mkdir -p "$SRC/assets"
+if [ -f "$ROOT/channels.json" ]; then
+  cp "$ROOT/channels.json" "$SRC/assets/channels.json"
+  echo "打包内置清单: $(grep -c '"no"' "$SRC/assets/channels.json") 条"
+else
+  cp "$SRC/assets/channels.sample.json" "$SRC/assets/channels.json"
+  echo "未找到 channels.json，使用示例清单"
+fi
+
 A_ASSETS=""
 [ -d "$SRC/assets" ] && A_ASSETS="-A $SRC/assets"
 
