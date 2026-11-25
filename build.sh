@@ -27,7 +27,11 @@ mkdir -p "$OUT/classes" "$OUT/gen" "$OUT/dexout"
 
 echo "[1/5] 资源"
 "$BT/aapt2" compile --dir "$SRC/res" -o "$OUT/compiled.flata"
+A_ASSETS=""
+[ -d "$SRC/assets" ] && A_ASSETS="-A $SRC/assets"
+
 "$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" \
+  $A_ASSETS \
   --manifest "$SRC/AndroidManifest.xml" \
   --java "$OUT/gen" \
   --min-sdk-version 21 --target-sdk-version 34 \
