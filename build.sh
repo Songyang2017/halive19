@@ -30,7 +30,7 @@ echo "[1/5] 资源"
 "$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" \
   --manifest "$SRC/AndroidManifest.xml" \
   --java "$OUT/gen" \
-  --min-sdk-version 19 --target-sdk-version 22 \
+  --min-sdk-version 21 --target-sdk-version 34 \
   "$OUT/compiled.flata"
 
 echo "[2/5] 编译 Java"
@@ -40,7 +40,7 @@ javac -source 8 -target 8 -encoding UTF-8 -cp "$JAR" -d "$OUT/classes" @"$OUT/so
 
 echo "[3/5] dex"
 find "$OUT/classes" -name '*.class' > "$OUT/classes.txt"
-"$BT/d8" --lib "$JAR" --min-api 19 --output "$OUT/dexout" @"$OUT/classes.txt"
+"$BT/d8" --lib "$JAR" --min-api 21 --output "$OUT/dexout" @"$OUT/classes.txt"
 
 echo "[4/5] 打包"
 cd "$OUT"
@@ -51,8 +51,8 @@ zip -q -u unsigned.apk classes.dex
 
 echo "[5/5] 签名"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
-  --key-pass pass:android --min-sdk-version 19 \
+  --key-pass pass:android --min-sdk-version 21 \
   --out "$ROOT/halive19-debug.apk" aligned.apk
-"$BT/apksigner" verify --min-sdk-version 19 "$ROOT/halive19-debug.apk"
+"$BT/apksigner" verify --min-sdk-version 21 "$ROOT/halive19-debug.apk"
 ls -lh "$ROOT/halive19-debug.apk"
 echo "APK=$ROOT/halive19-debug.apk"

@@ -1,7 +1,17 @@
 # 河南直播·全频道（halive19）
 
-一个给这台 CM201-1 / Android 4.4.2（SDK 19）电视写的最小直播播放器，用来解决
-`com.brlf.tvlivelaunch`（河南IPTV 官方客户端）**打开后只能看 CCTV1、无法换台**的问题。
+一个极简直播播放器：直接播运营商 CDN 的公开频道地址，绕开原厂 App 被锁在
+「默认频道 / 试看」状态机、只能看 CCTV1 的问题。纯 Java、单 Activity、无 AndroidX、无第三方库。
+
+## 分支说明
+
+| 分支 | 适配 | 说明 |
+| :--- | :--- | :--- |
+| **`main`**（当前） | **Android 10+**（minSdk 21 / targetSdk 34） | 分区存储、免存储权限；清单放 App 私有目录或内置 assets；画面按标准 DAR 自适应 |
+| **`android-4x`** | Android 4.4（SDK 19） | 老盒子专用。清单放 `/sdcard/tvhome19/`，并包含这家 Amlogic 播放器的画幅补偿（97.5%×75% 那条经验值） |
+
+两个分支的菜单、按键、播放逻辑相同，差异只在**存储访问**和**画面尺寸计算**。
+`android-4x` 的补偿系数是量特定固件得来的，换设备会放大失真，所以只保留在那个分支。
 
 ## 为什么需要它
 
@@ -25,7 +35,7 @@
 
 - **108 个频道**（服务端下发去重后的 ALL 分类清单），全部 `NoCharge`，含央视 1～17、
   CCTV5+/4K、各省卫视、河南卫视高清、河南移动电视、CGTN 系列、4K 频道等。
-- 频道清单在本机 `/sdcard/tvhome19/channels.json`，完全离线可读；文件丢失时内置 3 条兜底地址。
+- 频道清单是一个 JSON（`no` / `name` / `url`），放在 App 私有目录；APK 内置示例清单兜底。
 - 遥控器：
   - **上 / 下 / 左 / 右**：播放页里上一台 / 下一台
   - **OK**：打开频道菜单（版式见下一节）
@@ -33,7 +43,7 @@
   - **Back**：菜单里收起菜单，播放页退出
 - 换台时左上角显示 3 秒频道号与名称；播放失败时中央提示，按上下键换台重试。
 - 记住上次看的频道与上次停留的栏目；启动时短暂屏蔽按键，避免桌面 OK 键余波误开菜单。
-- 纯 Java、单 Activity、`VideoView` + `org.json`，无 AndroidX / 无第三方库，SDK 19 可运行。
+- 纯 Java、单 Activity、`VideoView` + `org.json`，无 AndroidX / 无第三方库；本分支 minSdk 21。
 
 ## 频道菜单（照着成熟电视直播 App 做）
 
@@ -105,11 +115,23 @@ TV_HOST=192.168.1.10 cleanyourtv/tools/venv/bin/python cleanyourtv/tools/tv.py \
 ## 更新频道清单
 
 > 仓库里只带 `channels.sample.json`（3 条示例地址）。真实清单含运营商 CDN 地址，不入库，
-> 请按下面的方法自己生成一份，推到电视的 `/sdcard/tvhome19/channels.json`。
+> 请按下面的方法自己生成一份。
 
+清单格式就是一个数组：
 
+```json
+[{"no": 1, "name": "中央一套高清", "url": "http://.../index.m3u8"}]
+```
 
-重新抓一次服务端清单即可（本机已存一份在 `handover/iptv-fix/channels.json`）：
+**放到哪**（本分支 Android 10+，无需存储权限）：
+
+```sh
+adb push channels.json /sdcard/Android/data/com.example.halive19/files/channels.json
+```
+
+App 会依次尝试：私有目录 → `/sdcard/tvhome19/` → `/sdcard/halive19/` → 内置 assets 示例。
+
+重新抓一次服务端清单即可：
 
 ```sh
 curl -sS -k -4 -H 'Content-Type: application/json' -X POST \
@@ -118,7 +140,7 @@ curl -sS -k -4 -H 'Content-Type: application/json' -X POST \
 ```
 
 取 `data.channelList` 中 `categoryCode == "ALL"` 的项，按 `channelNo` 去重，
-生成 `{"no":..,"name":..,"url":uAddress}` 数组推送到 `/sdcard/tvhome19/channels.json`。
+生成 `{"no":..,"name":..,"url":uAddress}` 数组，用上面的 `adb push` 推进去。
 
 ## 验证记录
 

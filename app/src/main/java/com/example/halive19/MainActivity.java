@@ -39,10 +39,8 @@ import java.util.Comparator;
  */
 public class MainActivity extends Activity {
 
-    private static final String[] CHANNEL_FILES = {
-            "/sdcard/tvhome19/channels.json",
-            "/sdcard/halive19/channels.json"
-    };
+    /** 清单文件名，放在 App 私有外部目录下即可（Android 10+ 免存储权限）。 */
+    private static final String CHANNEL_FILE = "channels.json";
 
     private final ArrayList<Channel> channels = new ArrayList<Channel>();
     private final Handler handler = new Handler();
@@ -150,7 +148,7 @@ public class MainActivity extends Activity {
             int last = getSharedPreferences("halive19", MODE_PRIVATE).getInt("last", 0);
             play(Math.max(0, Math.min(channels.size() - 1, last)));
         } else {
-            errorText.setText("频道清单缺失：/sdcard/tvhome19/channels.json");
+            errorText.setText("未找到频道清单，请把 channels.json 放到：\n" + channelPath());
         }
         handler.postDelayed(new Runnable() {
             public void run() {
@@ -159,46 +157,53 @@ public class MainActivity extends Activity {
         }, 6000);
     }
 
+    /** 清单的候选位置：App 私有目录 → 旧版共享目录 → 内置 assets。 */
+    private String channelPath() {
+        File ext = getExternalFilesDir(null);
+        if (ext != null) return new File(ext, CHANNEL_FILE).getAbsolutePath();
+        return "/sdcard/Android/data/com.example.halive19/files/" + CHANNEL_FILE;
+    }
+
     private void loadChannels() {
-        for (String path : CHANNEL_FILES) {
+        String priv = channelPath();
+        String[] candidates = {
+                priv,
+                "/sdcard/tvhome19/" + CHANNEL_FILE,
+                "/sdcard/halive19/" + CHANNEL_FILE
+        };
+
+        for (String path : candidates) {
             File f = new File(path);
-            if (!f.exists()) continue;
+            if (!f.isFile()) continue;
+            InputStream in = null;
             try {
-                InputStream in = new FileInputStream(f);
-                byte[] buf = new byte[(int) f.length()];
-                int off = 0, n;
-                while (off < buf.length && (n = in.read(buf, off, buf.length - off)) > 0) off += n;
-                in.close();
-                JSONArray arr = new JSONArray(new String(buf, "UTF-8"));
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject o = arr.getJSONObject(i);
-                    String url = o.optString("url", "");
-                    if (!url.startsWith("http")) continue;
-                    Channel c = new Channel();
-                    c.no = o.optInt("no", i + 1);
-                    c.name = o.optString("name", "频道" + c.no);
-                    c.url = url;
-                    channels.add(c);
+                in = new FileInputStream(f);
+                if (parse(in)) {
+                    android.util.Log.d("HaLive", "channels from " + path);
+                    break;
                 }
-                if (!channels.isEmpty()) break;
             } catch (Throwable ignored) {
+            } finally {
+                closeQuietly(in);
             }
         }
+
+        // 兜底：APK 内置的示例清单（真实清单请自行推送）
         if (channels.isEmpty()) {
-            // 兜底：即使清单文件丢失，也至少给几条可直接播放的央视频道
-            String[] urls = {
-                    "http://iptv.cdn.ha.chinamobile.com/PLTV/88888888/224/3221227355/index.m3u8?icpid=88888888&servicetype=1",
-                    "http://iptv.cdn.ha.chinamobile.com/PLTV/88888888/224/3221226706/index.m3u8?icpid=88888888&servicetype=1",
-                    "http://iptv.cdn.ha.chinamobile.com/PLTV/88888888/224/3221226569/index.m3u8?icpid=88888888&servicetype=1"
-            };
-            String[] names = {"中央一套", "中央一套高清", "中央二套高清"};
-            for (int i = 0; i < urls.length; i++) {
-                Channel c = new Channel();
-                c.no = i + 1;
-                c.name = names[i];
-                c.url = urls[i];
-                channels.add(c);
+            InputStream in = null;
+            try {
+                in = getAssets().open(CHANNEL_FILE);
+                parse(in);
+                android.util.Log.d("HaLive", "channels from assets");
+            } catch (Throwable ignored) {
+            } finally {
+                closeQuietly(in);
             }
+        }
+
+        if (channels.isEmpty()) {
+            errorText.setText("未找到频道清单，请把 channels.json 放到：\n" + priv);
+            errorText.setVisibility(View.VISIBLE);
         } else {
             Collections.sort(channels, new Comparator<Channel>() {
                 public int compare(Channel a, Channel b) {
@@ -207,6 +212,33 @@ public class MainActivity extends Activity {
             });
         }
         for (int i = 0; i < channels.size(); i++) channels.get(i).index = i;
+    }
+
+    private boolean parse(InputStream in) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+        JSONArray arr = new JSONArray(new String(bos.toByteArray(), "UTF-8"));
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject o = arr.getJSONObject(i);
+            String url = o.optString("url", "");
+            if (!url.startsWith("http")) continue;
+            Channel c = new Channel();
+            c.no = o.optInt("no", i + 1);
+            c.name = o.optString("name", "频道" + c.no);
+            c.url = url;
+            channels.add(c);
+        }
+        return !channels.isEmpty();
+    }
+
+    private void closeQuietly(InputStream in) {
+        if (in == null) return;
+        try {
+            in.close();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void wireVideo() {
